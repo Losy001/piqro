@@ -4,12 +4,29 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>piqro</title>
+
+	<link rel="stylesheet" type="text/css" href="index.css">
 </head>
 <body>
-	<h1><i>piqro</i></h1>
-	<p>a game console</p>
-	<a href="editor.html">open editor</a>
-	<br>
-	<a href="player.html">open player</a>
+	<div id="toolStrip">
+		<h1>piqro</h1>
+	</div>
+
+	<h4 id="">a simple game console.</h4>
+
+	<div id="buttonContainer">
+		<button id="editor">editor</button>
+		<button id="player">player</button>
+	</div>
+
+	<script>
+		player.onclick = function() {
+			window.location.href = '/player.html';
+		}
+
+		editor.onclick = function() {
+			window.location.href = '/editor.html';
+		}
+	</script>
 </body>
 </html>

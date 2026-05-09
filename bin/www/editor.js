@@ -1,5 +1,39 @@
 'use strict';
 
+const DEFAULT_SOURCE = `
+	var title = 'hello piqro'
+
+	print(title);
+	
+	var array[] = { 'h', 'e', 'l', 'l', 'o', ' ', 'p', 'i', 'q', 'r', 'o' };
+	
+	var x = 0;
+
+	forever {
+		back(0xf0 - 1);
+	
+		clear();
+	
+		var i = 0;
+	
+		repeat 11 {
+			var y = 160 + (sin((x * 0.0001) + i) * 5);
+	
+			fore(0)
+			text((121 / 4) + i * 16, y + 1, 2, array[i]);
+	
+			fore(color(((x * 0.0001) + i) % 7, ((x * 0.0001) + i) % 7, ((x * 0.0001) + i) % 3))
+			text((120 / 4) + i * 16, y, 2, array[i]);
+	
+			i += 1;
+		}
+	
+		x += 1;
+	
+		present();
+	}
+`;
+
 const CANVAS_WIDTH = 240;
 const CANVAS_HEIGHT = 320;
 
@@ -469,9 +503,11 @@ function initEditors() {
 		lineNumbers: true,
 	});
 
-	if (localStorage.sourceCode && localStorage.sourceCode !== '') {
-		editor.setValue(localStorage.sourceCode);
+	if (!localStorage.sourceCode) {
+		localStorage.sourceCode = DEFAULT_SOURCE;
 	}
+	
+	editor.setValue(localStorage.sourceCode);
 
 	setInterval(function() {
 		localStorage.sourceCode = editor.getValue();

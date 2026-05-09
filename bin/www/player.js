@@ -148,18 +148,26 @@ function isScreenSmall() {
 	return matchMedia('(max-width: 600px)').matches; 
 }
 
+function setCanvasSize(w, h) {
+	const dpr = window.devicePixelRatio || 1;
+
+	mainCanvas.width = w * dpr;
+	mainCanvas.height = h * dpr;
+
+	mainCanvas.style.width = w * dpr;
+	mainCanvas.style.height = h * dpr;
+}
+
 function clearCanvas() {
 	ctx.imageSmoothingEnabled = false;
 
 	if (isScreenSmall()) {
-		mainCanvas.width = window.innerWidth;
-		mainCanvas.height = window.innerHeight - toolStrip.clientHeight;
+		setCanvasSize(window.innerWidth, window.innerHeight - toolStrip.clientHeight);
 	
 		ctx.scale(1, 1);
 
 		window.onresize = function() {
-			mainCanvas.width = window.innerWidth;
-			mainCanvas.height = window.innerHeight - toolStrip.clientHeight;
+			setCanvasSize(window.innerWidth, window.innerHeight - toolStrip.clientHeight);
 		};
 
 		const canvasX = (mainCanvas.width / 2) - (CANVAS_WIDTH / 2);
@@ -199,8 +207,7 @@ function clearCanvas() {
 			];
 		}
 	} else {
-		mainCanvas.width = CANVAS_WIDTH * 2;
-		mainCanvas.height = CANVAS_HEIGHT * 2;
+		setCanvasSize(CANVAS_WIDTH * 2, CANVAS_HEIGHT * 2);
 
 		ctx.scale(2, 2);
 
