@@ -62,9 +62,11 @@ if "%web%"=="true" (
 )
 
 if "%hw%"=="true" (
+	if not exist bin\cmake mkdir bin\cmake
+
 	pushd bin\cmake
 		cmake ..\..\src\hw -G Ninja
-		ninja && copy piqro.uf2 h:
+		ninja && copy piqro.uf2 d:
 	popd
 	
 	goto exit
@@ -76,6 +78,7 @@ if "%1"=="" (
 	echo possible targets:
 	echo - cli
 	echo - web
+	echo - hw
 )
 
 :exit

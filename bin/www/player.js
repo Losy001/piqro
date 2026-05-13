@@ -294,8 +294,11 @@ async function scan() {
 
 async function launchScanner() {
 	inputStream.srcObject = await navigator.mediaDevices.getUserMedia({
-		video: { 
-			facingMode: 'environment'
+		video: {
+			facingMode: { ideal: "environment" },
+			width: { ideal: 1920 },
+			height: { ideal: 1080 },
+			zoom: 1.0
 		}
 	});
 

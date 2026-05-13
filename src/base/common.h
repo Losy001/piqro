@@ -33,8 +33,12 @@
 
 #define COUNT_OF(array) (sizeof(array) / sizeof(array[0]))
 
-#define MIN(a, b) (__builtin_elementwise_min((a), (b)))
+#if !defined MIN
+	#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
 
-#define MAX(a, b) (__builtin_elementwise_max((a), (b)))
+#if !defined MAX
+	#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#endif
 
 #define CLAMP(x, min, max) (MIN((typeof((x)))(max), MAX((x), (typeof((x)))(min))))

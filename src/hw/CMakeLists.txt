@@ -19,6 +19,7 @@ target_link_libraries(piqro
     pico_stdlib
     hardware_spi
     hardware_dma
+    hardware_gpio
 )
 
 target_include_directories(piqro PRIVATE

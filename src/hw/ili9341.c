@@ -1,10 +1,7 @@
 #include "ili9341.h"
 #include "hardware/spi.h"
 #include "hardware/gpio.h"
-#include "hardware/dma.h"
 #include "pico/stdlib.h"
-#include "pico/multicore.h"
-#include <string.h>
 
 #define TFT_NOP			0x00
 #define TFT_SWRST		0x01
@@ -35,13 +32,6 @@ static int16_t rst_pin;
 static uint16_t _width = ILI9341_TFTWIDTH;
 static uint16_t _height = ILI9341_TFTHEIGHT;
 static uint8_t _rotation = 0;
-
-static int dma_tx;
-static dma_channel_config dma_config;
-
-static uint16_t framebuffer[ILI9341_TFTWIDTH * ILI9341_TFTHEIGHT];
-static uint16_t *draw_buffer = framebuffer;
-static volatile bool displaying = false;
 
 static inline void dc_command(void)
 {
@@ -79,6 +69,15 @@ static void write_data(uint8_t data)
 	cs_high();
 }
 
+static void write_data16(uint16_t data)
+{
+	uint8_t buf[2] = {data >> 8, data & 0xFF};
+	dc_data();
+	cs_low();
+	spi_write_blocking(spi, buf, 2);
+	cs_high();
+}
+
 static void set_addr_window(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
 	uint32_t xa = ((uint32_t)x << 16) | (x + w - 1);
@@ -108,35 +107,6 @@ static void set_addr_window(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 	write_command(TFT_RAMWR);
 }
 
-static void push_framebuffer_dma(void)
-{
-	displaying = true;
-	
-	set_addr_window(0, 0, _width, _height);
-	
-	dc_data();
-	cs_low();
-	
-	uint32_t total_bytes = _width * _height * 2;
-	uint32_t chunk_size = 65535;
-	uint32_t offset = 0;
-	
-	while (total_bytes > 0)
-	{
-		uint32_t transfer_size = (total_bytes > chunk_size) ? chunk_size : total_bytes;
-		
-		dma_channel_set_read_addr(dma_tx, (uint8_t*)draw_buffer + offset, false);
-		dma_channel_set_trans_count(dma_tx, transfer_size, true);
-		dma_channel_wait_for_finish_blocking(dma_tx);
-		
-		total_bytes -= transfer_size;
-		offset += transfer_size;
-	}
-	
-	cs_high();
-	displaying = false;
-}
-
 void lcd_set_pins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t tx)
 {
 	dc_pin = dc;
@@ -158,19 +128,11 @@ void lcd_set_pins(uint16_t dc, uint16_t cs, int16_t rst, uint16_t sck, uint16_t 
 		gpio_put(rst_pin, 1);
 	}
 
-	spi_init(spi, 62500000);
+	spi_init(spi, 40000000);
 	spi_set_format(spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 	
 	gpio_set_function(tx, GPIO_FUNC_SPI);
 	gpio_set_function(sck, GPIO_FUNC_SPI);
-
-	dma_tx = dma_claim_unused_channel(true);
-	dma_config = dma_channel_get_default_config(dma_tx);
-	channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_8);
-	channel_config_set_dreq(&dma_config, spi_get_dreq(spi, true));
-	dma_channel_configure(dma_tx, &dma_config, &spi_get_hw(spi)->dr, NULL, 0, false);
-	
-	memset(framebuffer, 0, sizeof(framebuffer));
 }
 
 void lcd_init(void)
@@ -293,8 +255,6 @@ void lcd_init(void)
 	
 	write_command(0x29);
 	sleep_ms(20);
-	
-	push_framebuffer_dma();
 }
 
 void lcd_set_rotation(uint8_t m)
@@ -305,25 +265,32 @@ void lcd_set_rotation(uint8_t m)
 	switch (_rotation)
 	{
 		case 0:
+		{
 			write_data(TFT_MAD_MX | TFT_MAD_BGR);
 			_width = ILI9341_TFTWIDTH;
 			_height = ILI9341_TFTHEIGHT;
-			break;
+		} break;
+		
 		case 1:
+		{
 			write_data(TFT_MAD_MV | TFT_MAD_BGR);
 			_width = ILI9341_TFTHEIGHT;
 			_height = ILI9341_TFTWIDTH;
-			break;
+		}	break;
+		
 		case 2:
+		{
 			write_data(TFT_MAD_MY | TFT_MAD_BGR);
 			_width = ILI9341_TFTWIDTH;
 			_height = ILI9341_TFTHEIGHT;
-			break;
+		} break;
+		
 		case 3:
+		{
 			write_data(TFT_MAD_MX | TFT_MAD_MY | TFT_MAD_MV | TFT_MAD_BGR);
 			_width = ILI9341_TFTHEIGHT;
 			_height = ILI9341_TFTWIDTH;
-			break;
+		} break;
 	}
 }
 
@@ -338,18 +305,14 @@ void lcd_draw_pixel(int16_t x, int16_t y, uint16_t color)
 	{
 		return;
 	}
+
+	set_addr_window(x, y, 1, 1);
 	
-	uint32_t index;
-	if (_rotation == 0 || _rotation == 2)
-	{
-		index = y * ILI9341_TFTWIDTH + x;
-	}
-	else
-	{
-		index = x * ILI9341_TFTWIDTH + y;
-	}
-	
-	draw_buffer[index] = color;
+	uint8_t buf[2] = {color >> 8, color & 0xFF};
+	dc_data();
+	cs_low();
+	spi_write_blocking(spi, buf, 2);
+	cs_high();
 }
 
 void lcd_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
@@ -359,42 +322,90 @@ void lcd_fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
 		return;
 	}
 	
-	if (x < 0)
-	{
-		w += x;
-		x = 0;
-	}
-	if (y < 0)
-	{
-		h += y;
-		y = 0;
-	}
-	if ((x + w) > _width)
+	if ((x + w - 1) >= _width)
 	{
 		w = _width - x;
 	}
-	if ((y + h) > _height)
+	if ((y + h - 1) >= _height)
 	{
 		h = _height - y;
 	}
+
+	set_addr_window(x, y, w, h);
+
+	uint8_t hi = color >> 8;
+	uint8_t lo = color & 0xFF;
+
+	dc_data();
+	cs_low();
 	
-	for (int16_t j = 0; j < h; j++)
+	uint32_t num = (uint32_t)w * (uint32_t)h;
+	
+	for (uint32_t i = 0; i < num; i++)
 	{
-		for (int16_t i = 0; i < w; i++)
-		{
-			lcd_draw_pixel(x + i, y + j, color);
-		}
+		spi_write_blocking(spi, &hi, 1);
+		spi_write_blocking(spi, &lo, 1);
 	}
+	
+	cs_high();
 }
 
 void lcd_draw_fast_vline(int16_t x, int16_t y, int16_t h, uint16_t color)
 {
-	lcd_fill_rect(x, y, 1, h, color);
+	if ((x >= _width) || (y >= _height) || h <= 0)
+	{
+		return;
+	}
+	
+	if ((y + h - 1) >= _height)
+	{
+		h = _height - y;
+	}
+
+	set_addr_window(x, y, 1, h);
+
+	uint8_t hi = color >> 8;
+	uint8_t lo = color & 0xFF;
+
+	dc_data();
+	cs_low();
+	
+	for (int16_t i = 0; i < h; i++)
+	{
+		spi_write_blocking(spi, &hi, 1);
+		spi_write_blocking(spi, &lo, 1);
+	}
+	
+	cs_high();
 }
 
 void lcd_draw_fast_hline(int16_t x, int16_t y, int16_t w, uint16_t color)
 {
-	lcd_fill_rect(x, y, w, 1, color);
+	if ((x >= _width) || (y >= _height) || w <= 0)
+	{
+		return;
+	}
+	
+	if ((x + w - 1) >= _width)
+	{
+		w = _width - x;
+	}
+
+	set_addr_window(x, y, w, 1);
+
+	uint8_t hi = color >> 8;
+	uint8_t lo = color & 0xFF;
+
+	dc_data();
+	cs_low();
+	
+	for (int16_t i = 0; i < w; i++)
+	{
+		spi_write_blocking(spi, &hi, 1);
+		spi_write_blocking(spi, &lo, 1);
+	}
+	
+	cs_high();
 }
 
 void lcd_invert_display(bool invert)
@@ -405,14 +416,4 @@ void lcd_invert_display(bool invert)
 uint16_t lcd_color565(uint8_t r, uint8_t g, uint8_t b)
 {
 	return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-}
-
-void lcd_swap_buffers(void)
-{
-	push_framebuffer_dma();
-}
-
-void lcd_present(void)
-{
-	push_framebuffer_dma();
 }

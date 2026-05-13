@@ -1,6 +1,9 @@
 #include <pq/compiler.h>
 #include <pq/vm.h>
 
+#include <runtime/state.h>
+#include <runtime/canvas.h>
+
 void compiler_error_fn(uint16_t line, const char* what)
 {
 	printf("Compilation error: line %d: %s\n", line, what);
@@ -211,42 +214,26 @@ int main()
 	
 	PQ_Compiler c = {};
 
-	{
-		pq_compiler_init(&c, &compiler_arena, s(source), compiler_error_fn);
+	pq_compiler_init(&c, &compiler_arena, s(source), compiler_error_fn);
 	
-		pq_compiler_declare_foreign_proc(&c, s("print"), 1);
-		pq_compiler_declare_foreign_proc(&c, s("sin"), 1);
-		pq_compiler_declare_foreign_proc(&c, s("cos"), 1);
-		pq_compiler_declare_foreign_proc(&c, s("test"), 2);
-	}
+	RT_State rt = {};
 
+	rt_state_init(&compiler_arena, &rt);
+
+	rt_declare_procedures(&c);
+	
 	PQ_CompiledBlob b = pq_compile(&c);
 
-	static uint8_t vm_mem[128 * 1024];
-	Arena vm_arena = arena_make(vm_mem, sizeof(vm_mem));
-
-	PQ_VM vm = {};
+	fwrite(b.buffer, 1, b.size, fopen("test", "wb"));
 
 	dump_procedures(&c);
 	dump_instructions(&c);
-
-	{
-		pq_vm_init(&vm, &vm_arena, &b, vm_error_fn);
-	
-		pq_vm_bind_foreign_proc(&vm, s("print"), print_proc);
-		pq_vm_bind_foreign_proc(&vm, s("sin"), sin_proc);
-		pq_vm_bind_foreign_proc(&vm, s("cos"), cos_proc);
-		pq_vm_bind_foreign_proc(&vm, s("test"), test_proc);
-	
-		do
-		{
-			//printf("\n================================\n");
-			//dump_stack(&vm);
-			//dump_state(&vm);
-			//dump_instruction(&c, &vm);
-		} while (pq_execute(&vm));
-	}
 }
+
+void rt_print(const char *) {}
 
 #include <pq/compiler.c>
 #include <pq/vm.c>
+
+#include <runtime/canvas.c>
+#include <runtime/state.c>
